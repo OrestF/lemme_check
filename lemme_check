@@ -21,8 +21,6 @@ FileUtils.chdir(app_root) do
 
     def call
       FileUtils.chdir(app_root) do
-        puts "TIME: #{Time.now}"
-        puts "APP_ROOT: #{app_root}"
         init
         write(audit_title)
 
