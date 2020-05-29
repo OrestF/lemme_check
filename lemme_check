@@ -17,9 +17,8 @@ class LemmeCheck
   end
 
   def call
-    FileUtils.chdir app_root do
+    FileUtils.chdir(app_root) do
       init
-
       write(audit_title)
 
       bundler_audit
@@ -28,6 +27,7 @@ class LemmeCheck
       doctor_audit
 
       cleanup
+      final_message
     end
   rescue StandardError => e
     cleanup
@@ -35,9 +35,11 @@ class LemmeCheck
   end
 
   def cleanup
-    restore_gemfiles
+    FileUtils.chdir(app_root) do
+      restore_gemfiles
 
-    output_file.close
+      output_file.close
+    end
   end
 
   private
@@ -53,6 +55,10 @@ class LemmeCheck
     end
 
     add_active_record_doctor_to_gemfile
+  end
+
+  def final_message
+    puts "All checks saved to #{@output_file}"
   end
 
   def bundler_audit
