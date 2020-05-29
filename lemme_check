@@ -140,7 +140,7 @@ FileUtils.chdir(app_root) do
     end
 
     def audit_title
-      "#{app_root.split('/')[-1].classify}_audit_#{Time.now.strftime('%Y-%m-%d_%H:%M:%S')}"
+      "#{app_root.split('/')[-1].capitalize}_audit_#{Time.now.strftime('%Y-%m-%d_%H:%M:%S')}"
     end
 
     def output_file
