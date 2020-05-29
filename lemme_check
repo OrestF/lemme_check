@@ -149,7 +149,7 @@ FileUtils.chdir(app_root) do
     def create_output_file
       return @output_file if @output_file
 
-      output_folder = "#{app_root}/audit"
+      output_folder = 'audit'
       unless File.directory?(output_folder)
         puts 'Creating "audit/" folder...'
         FileUtils.mkdir_p(output_folder)
