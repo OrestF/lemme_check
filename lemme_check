@@ -1,7 +1,7 @@
 #!/usr/bin/ruby
 require 'fileutils'
 
-app_root = File.expand_path(ARGV[0] || '.', __dir__)
+app_root = ARGV[0] || File.expand_path('.', __dir__)
 
 FileUtils.chdir(app_root) do
   require 'open3'
