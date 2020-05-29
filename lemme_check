@@ -1,7 +1,7 @@
 #!/usr/bin/ruby
 require 'fileutils'
 
-app_root = ARGV[0] || File.expand_path('.', __dir__)
+app_root = File.expand_path('.', __dir__)
 
 FileUtils.chdir(app_root) do
   require 'open3'
@@ -14,7 +14,7 @@ FileUtils.chdir(app_root) do
       new.call
     end
 
-    attr_reader :app_root
+    attr_reader :app_root ,:output_file
     def initialize(app_root)
       @app_root = app_root
     end
@@ -55,6 +55,8 @@ FileUtils.chdir(app_root) do
         puts "Installing #{gem}..."
         system! "gem install #{gem} --no-document"
       end
+
+      create_output_file
 
       add_active_record_doctor_to_gemfile
     end
@@ -143,7 +145,7 @@ FileUtils.chdir(app_root) do
       "#{app_root.split('/')[-1].capitalize}_audit_#{Time.now.strftime('%Y-%m-%d_%H:%M:%S')}"
     end
 
-    def output_file
+    def create_output_file
       return @output_file if @output_file
 
       output_folder = "#{app_root}/audit"
@@ -185,8 +187,10 @@ FileUtils.chdir(app_root) do
     end
 
     def add_active_record_doctor_to_gemfile
+      puts "APP+_ROOT: #{app_root}"
       @original_gemfile = File.readlines('Gemfile')
       @original_gemfile_lock = File.readlines('Gemfile.lock')
+
 
       File.open('Gemfile', 'a') { |f| f.puts(ACTIVE_RECORD_DOCTOR_GEMLINE) }
     end
