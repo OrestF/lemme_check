@@ -1,0 +1,213 @@
+#!/usr/bin/ruby
+require 'fileutils'
+require 'open3'
+require 'rails'
+
+class LemmeCheck
+  REQUIRED_GEMS = %w[bundler-audit brakeman rubocop active_record_doctor].freeze
+  ACTIVE_RECORD_DOCTOR_GEMLINE = "gem 'active_record_doctor', group: :development".freeze
+
+  def self.call
+    new.call
+  end
+
+  attr_reader :app_root
+  def initialize
+    @app_root = ARGV[0] || File.expand_path('.', __dir__)
+  end
+
+  def call
+    FileUtils.chdir app_root do
+      init
+
+      write(audit_title)
+
+      bundler_audit
+      brakeman_audit
+      rubocop_audit
+      doctor_audit
+
+      cleanup
+    end
+  rescue StandardError => e
+    cleanup
+    raise e
+  end
+
+  def cleanup
+    restore_gemfiles
+
+    output_file.close
+  end
+
+  private
+
+  def init
+    puts '== Installing dependencies =='
+
+    REQUIRED_GEMS.each do |gem|
+      next if system("which #{gem}")
+
+      puts "Installing #{gem}..."
+      system! "gem install #{gem} --no-document"
+    end
+
+    add_active_record_doctor_to_gemfile
+  end
+
+  def bundler_audit
+    title('Looking for vulnerable gems')
+
+    run_and_write('bundle-audit check')
+  end
+
+  def brakeman_audit
+    hr
+    title('Looking for security holes')
+
+    # skip params MAssAssignment checks brakeman --except MassAssignment
+    run_and_write('brakeman')
+  end
+
+  def rubocop_audit
+    hr
+    title('Checking code style')
+
+    run_and_write('rubocop')
+  end
+
+  def doctor_audit_unindexed
+    title('Unindexed columns')
+    run_and_write('bundle exec rake active_record_doctor:unindexed_foreign_keys')
+    run_and_write('bundle exec rake active_record_doctor:unindexed_deleted_at')
+  end
+
+  def doctor_audit_redundant_indexes
+    title('Redundant indexes')
+    run_and_write('bundle exec rake active_record_doctor:extraneous_indexes')
+  end
+
+  def doctor_audit_missing_foreign_keys
+    title('Detecting Missing Foreign Key Constraints')
+    run_and_write('bundle exec rake active_record_doctor:missing_foreign_keys')
+  end
+
+  def doctor_audit_undefined_table_references
+    title('Detecting Models Referencing Undefined Tables')
+    run_and_write('bundle exec rake active_record_doctor:undefined_table_references')
+  end
+
+  def doctor_audit_missing_unique_indexes
+    title('Detecting Uniqueness Validations not Backed by an Index')
+    run_and_write('bundle exec rake active_record_doctor:missing_unique_indexes')
+  end
+
+  def doctor_audit_missing_non_null_constraint
+    title('Detecting Missing Non-NULL Constraints')
+    run_and_write('bundle exec rake active_record_doctor:missing_non_null_constraint')
+  end
+
+  def doctor_audit_missing_presence_validation
+    title('Detecting Missing Presence Validations')
+    run_and_write('bundle exec rake active_record_doctor:missing_presence_validation')
+  end
+
+  def doctor_audit_incorrect_boolean_presence_validation
+    title('Detecting Incorrect Presence Validations on Boolean Columns')
+    run_and_write('bundle exec rake active_record_doctor:incorrect_boolean_presence_validation')
+  end
+
+  def doctor_audit
+    hr
+    title('Checking database')
+
+    doctor_audit_unindexed
+    doctor_audit_redundant_indexes
+    doctor_audit_missing_foreign_keys
+    doctor_audit_undefined_table_references
+    doctor_audit_missing_unique_indexes
+    doctor_audit_missing_non_null_constraint
+    doctor_audit_missing_presence_validation
+    doctor_audit_incorrect_boolean_presence_validation
+  end
+
+  def system!(*args)
+    system(*args) || abort("\n== Command #{args} failed ==")
+  end
+
+  def audit_title
+    "#{app_root.split('/')[-1].classify}_audit_#{Time.now.strftime('%Y-%m-%d_%H:%M:%S')}"
+  end
+
+  def output_file
+    return @output_file if @output_file
+
+    output_folder = "#{app_root}/audit"
+    unless File.directory?(output_folder)
+      puts 'Creating "audit/" folder...'
+      FileUtils.mkdir_p(output_folder)
+    end
+
+    @output_file ||= File.new("#{output_folder}/#{audit_title}.txt", 'w')
+  end
+
+  def title(title)
+    write('')
+    write("========== #{title.upcase} ==========")
+    write('')
+  end
+
+  def write(text)
+    puts text
+    output_file.puts(text)
+  end
+
+  def hr
+    write('_' * 120)
+  end
+
+  def write_stdout(stdout)
+    if stdout&.empty?
+      write('No issues!')
+    else
+      stdout.split("\n").each do |line|
+        write(line)
+      end
+    end
+  end
+
+  def run_and_write(command)
+    write_stdout(Open3.capture3(command.to_s)[0])
+  end
+
+  def add_active_record_doctor_to_gemfile
+    @original_gemfile = File.readlines('Gemfile')
+    @original_gemfile_lock = File.readlines('Gemfile.lock')
+
+    File.open('Gemfile', 'a') { |f| f.puts(ACTIVE_RECORD_DOCTOR_GEMLINE) }
+  end
+
+  def restore_gemfiles
+    if @original_gemfile
+      File.open('Gemfile', 'w') do |f|
+        @original_gemfile.each { |line| f.write(line) }
+      end
+    end
+
+    if @original_gemfile_lock
+      File.open('Gemfile.lock', 'w') do |f|
+        @original_gemfile_lock.each { |line| f.write(line) }
+      end
+    end
+  end
+end
+
+checker = LemmeCheck.new
+
+begin
+  checker.call
+rescue SystemExit, Interrupt, Exception
+  checker.cleanup
+end
+
+trap('SIGINT') { checker.cleanup }
