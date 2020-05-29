@@ -21,6 +21,7 @@ FileUtils.chdir(app_root) do
 
     def call
       FileUtils.chdir(app_root) do
+        puts "APP_ROOT: #{app_root}"
         init
         write(audit_title)
 
@@ -187,7 +188,6 @@ FileUtils.chdir(app_root) do
     end
 
     def add_active_record_doctor_to_gemfile
-      puts "APP+_ROOT: #{app_root}"
       @original_gemfile = File.readlines('Gemfile')
       @original_gemfile_lock = File.readlines('Gemfile.lock')
 
